@@ -514,8 +514,15 @@ Keep responses concise (2-3 sentences) unless asked for details.
 Be helpful, educational, and encouraging."""}
         ]
         
+        # Only include last 5 messages for efficient token usage
         if chat_history:
-            messages.extend(chat_history[-5:])  # Include last 5 messages for context
+            recent_messages = chat_history[-5:]
+            for msg in recent_messages:
+                # Only add role and content, skip metadata
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
         
         messages.append({"role": "user", "content": user_query})
         
@@ -524,7 +531,7 @@ Be helpful, educational, and encouraging."""}
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=300
+                max_tokens=200  # Reduced for chat responses
             )
             
             reply = response.choices[0].message.content.strip()
@@ -574,13 +581,19 @@ When answering research questions:
 3. Explain concepts clearly without jargon
 4. Include relevant context and examples
 5. Mention any limitations or risks
-6. Keep responses educational and informative
+6. Keep responses educational and informative (300-400 words max)
 
 Always include a note that this is general information, not specific investment advice."""}
         ]
         
+        # Only include last 3 messages for research context (save tokens)
         if chat_history:
-            messages.extend(chat_history[-5:])
+            recent_messages = chat_history[-3:]
+            for msg in recent_messages:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
         
         messages.append({"role": "user", "content": user_query})
         
@@ -589,13 +602,13 @@ Always include a note that this is general information, not specific investment 
                 model=self.model,
                 messages=messages,
                 temperature=0.6,
-                max_tokens=800
+                max_tokens=600  # Reduced from 800 for efficiency
             )
             
             reply = response.choices[0].message.content.strip()
             
             # Add disclaimer for research
-            reply += "\n\n💡 Note: This is general educational information. For specific investment decisions, please consult a licensed financial advisor."
+            reply += "\n\n💡 *Note: This is general educational information. For specific investment decisions, please consult a licensed financial advisor.*"
             
             return {
                 "success": True,

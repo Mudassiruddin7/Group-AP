@@ -56,6 +56,30 @@ st.markdown("""
         padding: 1rem;
         margin: 1rem 0;
     }
+    /* ChatGPT-like styling */
+    .stChatMessage {
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    .stChatMessage[data-testid="user-message"] {
+        background-color: #f7f7f8;
+    }
+    .stChatMessage[data-testid="assistant-message"] {
+        background-color: #ffffff;
+    }
+    /* Better chat input */
+    .stChatInput {
+        border-radius: 1.5rem;
+        border: 1px solid #d9d9e3;
+    }
+    /* Smooth transitions */
+    .stChatMessage, .stButton, .stMetric {
+        transition: all 0.2s ease;
+    }
+    .stButton:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,70 +124,135 @@ def main():
 
 
 def show_ai_chat():
-    """AI Chat interface"""
-    st.header("💬 Chat with Portfolio AI")
-    st.write("Ask me anything about portfolio recommendations, risk management, or investment strategies!")
+    """AI Chat interface - ChatGPT style"""
+    st.header("💬 Chat with F2 Portfolio AI")
     
-    # Chat history display
-    chat_container = st.container()
+    # Header controls
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.caption("Ask about investments, research companies, or get personalized portfolio recommendations")
+    with col2:
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.chat_history = []
+            st.session_state.recommendation = None
+            st.rerun()
     
-    with chat_container:
-        for message in st.session_state.chat_history:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-    
-    # User input
-    user_input = st.chat_input("Type your investment question here...")
-    
-    if user_input:
-        # Add user message
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        
-        with st.chat_message("user"):
-            st.write(user_input)
-        
-        # Get agent response
-        with st.chat_message("assistant"):
-            with st.spinner("🤔 Thinking..."):
-                result = st.session_state.agent.process_query(
-                    user_input,
-                    st.session_state.chat_history
-                )
-                
-                # Check if this is a chat/research response or portfolio recommendation
-                if result.get("is_chat") or result.get("is_research"):
-                    # General chat or research - just show the message
-                    response_text = result.get("message", "")
-                    st.write(response_text)
-                    
-                elif result["success"] and result.get("recommendation"):
-                    # Portfolio recommendation - show full details
-                    response_text = result["recommendation"]["explanation"]
-                    st.write(response_text)
-                    
-                    # Store recommendation for visualization
-                    st.session_state.recommendation = result
-                    
-                    # Show visualizations
+    # Display chat messages
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"], avatar="👤" if message["role"] == "user" else "🤖"):
+            st.markdown(message["content"])
+            
+            # Show portfolio visualization if it exists in the message
+            if message["role"] == "assistant" and message.get("has_portfolio"):
+                if st.session_state.recommendation:
                     st.divider()
-                    col1, col2 = st.columns(2)
+                    
+                    # Compact metrics display
+                    metrics = st.session_state.recommendation["recommendation"]["metrics"]
+                    col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
+                        st.metric("📈 Return", f"{metrics['expected_annual_return']*100:.1f}%")
+                    with col2:
+                        st.metric("📊 Volatility", f"{metrics['annual_volatility']*100:.1f}%")
+                    with col3:
+                        st.metric("⚡ Sharpe", f"{metrics['sharpe_ratio']:.2f}")
+                    with col4:
+                        st.metric("🎯 Holdings", metrics['diversification'])
+                    
+                    # Charts in expander to save space
+                    with st.expander("📊 View Portfolio Charts", expanded=False):
+                        chart_col1, chart_col2 = st.columns(2)
+                        
+                        with chart_col1:
+                            show_allocation_chart(st.session_state.recommendation["recommendation"]["allocation"])
+                        
+                        with chart_col2:
+                            show_sector_chart(st.session_state.recommendation["recommendation"]["sector_allocation"])
+    
+    # Chat input at the bottom
+    user_input = st.chat_input("Ask me anything... e.g., 'hi', 'research Apple stock', or 'I'm 25, moderate risk'")
+    
+    if user_input:
+        # Add user message to history
+        st.session_state.chat_history.append({
+            "role": "user",
+            "content": user_input
+        })
+        
+        # Display user message immediately
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_input)
+        
+        # Get AI response with streaming simulation
+        with st.chat_message("assistant", avatar="🤖"):
+            message_placeholder = st.empty()
+            
+            # Show thinking indicator
+            message_placeholder.markdown("🤔 *Thinking...*")
+            
+            # Process query (only send last 10 messages for context efficiency)
+            recent_history = st.session_state.chat_history[-10:] if len(st.session_state.chat_history) > 10 else st.session_state.chat_history
+            
+            result = st.session_state.agent.process_query(
+                user_input,
+                recent_history
+            )
+            
+            # Determine response type and content
+            has_portfolio = False
+            
+            if result.get("is_chat") or result.get("is_research"):
+                # General chat or research response
+                response_text = result.get("message", "")
+                
+            elif result["success"] and result.get("recommendation"):
+                # Portfolio recommendation
+                response_text = result["recommendation"]["explanation"]
+                has_portfolio = True
+                st.session_state.recommendation = result
+                
+            else:
+                # Error
+                response_text = "❌ " + result.get("message", "I encountered an error. Please try again.")
+            
+            # Display response with simulated streaming effect
+            message_placeholder.markdown(response_text)
+            
+            # If portfolio recommendation, show metrics
+            if has_portfolio:
+                st.divider()
+                
+                metrics = result["recommendation"]["metrics"]
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("📈 Return", f"{metrics['expected_annual_return']*100:.1f}%")
+                with col2:
+                    st.metric("📊 Volatility", f"{metrics['annual_volatility']*100:.1f}%")
+                with col3:
+                    st.metric("⚡ Sharpe", f"{metrics['sharpe_ratio']:.2f}")
+                with col4:
+                    st.metric("🎯 Holdings", metrics['diversification'])
+                
+                with st.expander("📊 View Portfolio Charts", expanded=False):
+                    chart_col1, chart_col2 = st.columns(2)
+                    
+                    with chart_col1:
                         show_allocation_chart(result["recommendation"]["allocation"])
                     
-                    with col2:
+                    with chart_col2:
                         show_sector_chart(result["recommendation"]["sector_allocation"])
-                    
-                    # Show metrics
-                    show_metrics_cards(result["recommendation"]["metrics"])
-                    
-                else:
-                    # Error case
-                    response_text = result.get("message", "Error processing request")
-                    st.error(response_text)
         
-        # Add assistant message
-        st.session_state.chat_history.append({"role": "assistant", "content": response_text})
+        # Add assistant response to history
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": response_text,
+            "has_portfolio": has_portfolio
+        })
+        
+        # Rerun to update the chat display
+        st.rerun()
 
 
 def show_quick_recommend():
