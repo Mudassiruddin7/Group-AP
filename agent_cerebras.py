@@ -339,47 +339,70 @@ class CerebrasPortfolioAgent:
             "base_explanation": optimization_result["explanation"]
         }
         
-        prompt = f"""You are a friendly financial advisor explaining a portfolio recommendation.
+        prompt = f"""You are "F2 Portfolio AI" — a personalized portfolio strategist.
 
-PORTFOLIO CONTEXT:
-Our investment universe contains 27 carefully selected stocks across 9 sectors:
-- IT: AAPL (Apple), MSFT (Microsoft), CSCO (Cisco), DDOG (Datadog), NOW (ServiceNow)
-- Finance: JPM (JPMorgan), V (Visa)
-- Healthcare: JNJ (Johnson & Johnson), UNH (UnitedHealth)
-- Agriculture: AGCO, BG (Bunge), CALM (Cal-Maine Foods)
-- Engineering: CAT (Caterpillar), DE (Deere), GE (General Electric)
-- Military Engineering: BA (Boeing), LMT (Lockheed Martin)
-- Natural Resources: CVX (Chevron)
-- Food & Beverages: KO (Coca-Cola)
-- Pharmaceuticals: Various pharma stocks
-
-USER'S SITUATION:
+**USER PROFILE:**
 Query: "{user_query}"
+Age Context: {params.get('reasoning', 'Not specified')}
 Risk Tolerance: {params['risk_profile'].upper()}
 Investment Timeline: {params['horizon_years']} years
-Age/Context: {params.get('reasoning', 'Not specified')}
 
-RECOMMENDED PORTFOLIO:
-Expected Return: {optimization_result['metrics']['expected_annual_return']*100:.1f}% annually
-Risk (Volatility): {optimization_result['metrics']['annual_volatility']*100:.1f}%
-Sharpe Ratio: {optimization_result['metrics']['sharpe_ratio']:.2f} (higher is better)
+**DEMOGRAPHIC GUIDANCE:**
+{"• Young Investor (18-30): Long-term growth focus, 70-85% equity, embrace volatility for compounding" if params['horizon_years'] >= 12 else ""}
+{"• Middle-Aged (31-50): Balanced approach, 55-70% equity, growth + preservation" if 8 <= params['horizon_years'] < 12 else ""}
+{"• Pre-Retirement (51-65): Capital protection, 35-50% equity, income generation" if 5 <= params['horizon_years'] < 8 else ""}
+{"• Retired (65+): Stability first, 20-35% equity, dividend focus" if params['horizon_years'] < 5 else ""}
+
+**PORTFOLIO UNIVERSE:**
+Our 27-stock universe spans 9 sectors:
+• IT: AAPL (Apple), MSFT (Microsoft), CSCO (Cisco), DDOG (Datadog), NOW (ServiceNow)
+• Finance: JPM (JPMorgan), V (Visa), MS (Morgan Stanley)
+• Healthcare: JNJ (Johnson & Johnson), UNH (UnitedHealth), HUM (Humana), PFE (Pfizer)
+• Agriculture: AGCO, BG (Bunge), CALM (Cal-Maine), DE (Deere), GRWG
+• Engineering: CAT (Caterpillar), GE (General Electric), IEX, OSK
+• Military Engineering: BA (Boeing), LMT (Lockheed Martin)
+• Natural Resources: CVX (Chevron)
+• Food & Beverages: KO (Coca-Cola), PG (Procter & Gamble)
+• Entertainment: NFLX (Netflix), SPY
+• Telecommunications: TMUS (T-Mobile)
+
+**RECOMMENDED PORTFOLIO:**
+Expected Annual Return: {optimization_result['metrics']['expected_annual_return']*100:.1f}%
+Annual Volatility (Risk): {optimization_result['metrics']['annual_volatility']*100:.1f}%
+Sharpe Ratio: {optimization_result['metrics']['sharpe_ratio']:.2f} (measures risk-adjusted returns)
 Number of Holdings: {optimization_result['metrics']['diversification']} stocks
 
-TOP 5 HOLDINGS:
+**TOP 5 HOLDINGS:**
 {self._format_top_holdings(optimization_result['weights'], limit=5)}
 
-SECTOR BREAKDOWN:
+**SECTOR BREAKDOWN:**
 {self._format_sector_allocation(optimization_result['sector_allocation'])}
 
-INSTRUCTIONS:
-Write a warm, conversational explanation (2-3 paragraphs) that:
-1. Greets the user and acknowledges their situation (age, risk tolerance, timeline)
-2. Explains WHY this portfolio fits them (match risk profile to holdings)
-3. Highlights the key stocks and sectors in simple terms (e.g., "tech giants like Apple and Microsoft")
-4. Mentions the expected returns and how diversification protects them
-5. Ends with a forward-looking statement
+**YOUR TASK:**
+Write a warm, educational explanation (3-4 paragraphs) following this structure:
 
-Keep it professional but friendly. Avoid jargon. Use "you" and "your".
+**Paragraph 1 - Personal Acknowledgment:**
+Greet the user and acknowledge their specific situation. Reference their age/timeline and what that means for investment strategy.
+Example: "Great to connect with you! At 30 with a 12-year horizon, you're in an excellent position to build long-term wealth..."
+
+**Paragraph 2 - Portfolio Rationale:**
+Explain WHY this {params['risk_profile']} risk portfolio fits them. Mention 2-3 specific companies by name (e.g., "Apple for tech growth, JPMorgan for financial stability").
+Explain how the sector mix provides diversification.
+
+**Paragraph 3 - Performance & Risk Context:**
+Discuss the expected {optimization_result['metrics']['expected_annual_return']*100:.1f}% return in realistic terms. 
+Explain what the {optimization_result['metrics']['annual_volatility']*100:.1f}% volatility means for them.
+Put the Sharpe ratio ({optimization_result['metrics']['sharpe_ratio']:.2f}) in context.
+
+**Paragraph 4 - Forward Guidance:**
+How might this portfolio evolve? When to rebalance? What to watch for?
+End with an encouraging, forward-looking statement.
+
+**TONE:** Professional but friendly. Use "you" and "your". Explain like you're talking to a smart friend, not a finance PhD.
+
+**AVOID:** Jargon without explanation, guarantees, overly technical language.
+
+Write ONLY the explanation (no preamble, no meta-commentary):
 4. Mentions 2-3 specific stocks and why they're included
 5. Keeps a conversational, helpful tone
 6. Stays under 300 words
