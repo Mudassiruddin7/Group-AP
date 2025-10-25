@@ -114,48 +114,56 @@ You have access to a real portfolio containing stocks from multiple sectors:
 3. Performance Metrics: expected return, volatility, Sharpe ratio
 4. Disclaimer: mandatory regulatory notice"""
 
-EXTRACTION_PROMPT_TEMPLATE = """Analyze this user query and extract investment parameters:
+EXTRACTION_PROMPT_TEMPLATE = """You are an expert financial advisor AI. Extract investment parameters from this user query.
 
 User Query: "{query}"
 
-Extract:
-1. **Risk Profile**: Classify as 'low', 'medium', or 'high'
-   - Keywords: conservative/safe/cautious → low
-   - Keywords: balanced/moderate/medium → medium  
-   - Keywords: aggressive/growth/high → high
-   - Age-based inference: 
-     * Young (18-30) → typically medium-high risk tolerance
-     * Mid-career (30-50) → typically medium risk tolerance
-     * Near retirement (50+) → typically low-medium risk tolerance
+**CONTEXT**: Our portfolio contains 27 stocks across sectors: IT (AAPL, MSFT, CSCO, DDOG, NOW), Finance (JPM, V), Healthcare (JNJ, UNH), Agriculture (AGCO, BG, CALM), Engineering (CAT, DE, GE), Military Engineering (BA, LMT), Natural Resources (CVX), Food & Beverages (KO), and Pharmaceuticals.
 
-2. **Horizon (Years)**: Extract investment timeline
-   - Look for explicit years or time periods
-   - Age-based inference if mentioned:
-     * Age 18-25 → assume 15-20 years for long-term goals
-     * Age 25-35 → assume 10-15 years
-     * Age 35-50 → assume 8-12 years
-     * Age 50+ → assume 5-10 years
-   - Map life events: retirement (assume 15y), house (5-7y), education (10-15y)
-   - Default: 10 years if young age mentioned, 5 years otherwise
+**EXTRACTION RULES**:
 
-3. **Sector Preferences** (optional): Any specific industry interests
-   - Available sectors: IT, Finance, Healthcare, Agriculture, Engineering, Military Engineering, Natural Resources, Food & Beverages, Pharmaceuticals
+1. **Risk Profile** (REQUIRED - default to 'medium' if unclear):
+   - LOW: conservative, safe, cautious, low risk, capital preservation
+   - MEDIUM: moderate, balanced, medium risk, standard, typical
+   - HIGH: aggressive, growth, high risk, maximum returns
+   - **Age inference**: 
+     * 18-30 years old → medium-high risk
+     * 30-50 years old → medium risk  
+     * 50+ years old → low-medium risk
 
-4. **Constraints** (optional): Any specific requirements
+2. **Investment Horizon** (REQUIRED - infer from age/context):
+   - Explicit years: look for "5 years", "10 year", etc.
+   - **Age-based defaults**:
+     * Age 20-30 → 15 years (long-term wealth building)
+     * Age 30-40 → 12 years (career growth phase)
+     * Age 40-50 → 10 years (mid-career)
+     * Age 50-60 → 7 years (pre-retirement)
+     * Age 60+ → 5 years (retirement)
+   - Life events: retirement (15y), house (5-7y), college (10y)
+   - DEFAULT: 10 years if nothing specified
 
-**IMPORTANT**: Even if the query is brief (e.g., "im 20, moderate risk"), extract what you can:
-- If age is mentioned, infer a reasonable horizon
-- If risk level is mentioned, use it directly
-- Always return valid JSON even for minimal input
+3. **Sector Preferences** (OPTIONAL):
+   - Only include if user explicitly mentions sectors
+   - Available: IT, Finance, Healthcare, Agriculture, Engineering, Military Engineering, Natural Resources, Food & Beverages, Pharmaceuticals
 
-Return ONLY valid JSON:
+4. **Constraints** (OPTIONAL):
+   - Specific stocks to exclude/include
+   - Ethical considerations (ESG, etc.)
+
+**EXAMPLES**:
+- "hi im 30 with medium risk tolerance" → {{"risk_profile": "medium", "horizon_years": 12}}
+- "im 20, moderate risk" → {{"risk_profile": "medium", "horizon_years": 15}}
+- "conservative portfolio, 5 years" → {{"risk_profile": "low", "horizon_years": 5}}
+- "aggressive growth" → {{"risk_profile": "high", "horizon_years": 10}}
+
+**OUTPUT FORMAT** (ONLY return valid JSON, no explanations):
 {{
   "risk_profile": "low|medium|high",
-  "horizon_years": <integer>,
-  "sector_preferences": [<list of sectors or empty>],
+  "horizon_years": <integer between 1-30>,
+  "sector_preferences": [],
   "constraints": {{}},
   "confidence": <0.0-1.0>,
-  "reasoning": "<brief explanation of what was extracted>"
+  "reasoning": "<one sentence explaining what you extracted>"
 }}"""
 
 # ========== Streamlit Configuration ==========

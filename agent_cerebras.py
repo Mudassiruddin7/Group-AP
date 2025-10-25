@@ -80,17 +80,13 @@ class CerebrasPortfolioAgent:
             }
         
         # Step 2: Extract Investment Parameters using Cerebras
-        try:
-            params = self._extract_parameters(user_query)
-            logger.info(f"Extracted parameters: {params}")
-        except Exception as e:
-            logger.error(f"Parameter extraction failed: {e}")
-            return {
-                "success": False,
-                "error": "Could not understand investment requirements",
-                "message": "I couldn't extract clear investment parameters from your query. "
-                          "Please specify your risk tolerance (low/medium/high) and investment timeline."
-            }
+        params = self._extract_parameters(user_query)
+        logger.info(f"Extracted parameters: {params}")
+        
+        # Validate extraction confidence
+        if params.get("confidence", 0) < 0.3:
+            logger.warning(f"Low confidence extraction: {params.get('confidence')}")
+            # Still continue with defaults rather than failing
         
         # Step 3: Quantitative Optimization
         try:
@@ -163,103 +159,155 @@ class CerebrasPortfolioAgent:
         
         extraction_prompt = EXTRACTION_PROMPT_TEMPLATE.format(query=user_query)
         
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a financial parameter extraction AI specialized in understanding investment queries. Extract investment parameters from user input (even brief queries) and return ONLY valid JSON. Be smart about inferring parameters from context like age and risk tolerance."},
-                {"role": "user", "content": extraction_prompt}
-            ],
-            temperature=0.2,  # Lower temperature for consistent extraction
-            max_tokens=800
-        )
-        
-        content = response.choices[0].message.content.strip()
-        logger.info(f"LLM extraction response: {content[:200]}...")
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a specialized financial parameter extraction AI. Your ONLY job is to extract investment parameters and return valid JSON. Be intelligent about inferring missing information from context like age."},
+                    {"role": "user", "content": extraction_prompt}
+                ],
+                temperature=0.1,  # Very low temperature for consistent extraction
+                max_tokens=1000,
+                top_p=0.95
+            )
+            
+            content = response.choices[0].message.content.strip()
+            logger.info(f"Cerebras response: {content[:300]}...")
+            
+        except Exception as e:
+            logger.error(f"Cerebras API call failed: {e}")
+            # Fallback to regex extraction
+            return self._fallback_extraction(user_query)
         
         # Parse JSON response
         try:
-            # Remove markdown code blocks if present
-            if content.startswith("```json"):
+            # Clean up markdown code blocks
+            if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
-            elif content.startswith("```"):
-                content = content.split("```")[1].split("```")[0].strip()
+            elif "```" in content:
+                # Try to find JSON between any code blocks
+                parts = content.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("{") and part.endswith("}"):
+                        content = part
+                        break
+            
+            # Remove any leading/trailing text
+            if "{" in content and "}" in content:
+                start = content.index("{")
+                end = content.rindex("}") + 1
+                content = content[start:end]
             
             params = json.loads(content)
             
-            # Validate and normalize required fields
+            # Validate and normalize risk profile
             if "risk_profile" not in params or not params["risk_profile"]:
-                params["risk_profile"] = "medium"  # Default
+                params["risk_profile"] = "medium"
             
-            # Normalize risk profile keywords
             risk_lower = str(params["risk_profile"]).lower()
-            if "low" in risk_lower or "conservative" in risk_lower or "safe" in risk_lower:
+            if any(word in risk_lower for word in ["low", "conservative", "safe", "cautious"]):
                 params["risk_profile"] = "low"
-            elif "high" in risk_lower or "aggressive" in risk_lower or "growth" in risk_lower:
+            elif any(word in risk_lower for word in ["high", "aggressive", "growth", "risky"]):
                 params["risk_profile"] = "high"
             else:
                 params["risk_profile"] = "medium"
             
+            # Validate and normalize horizon
             if "horizon_years" not in params or not params["horizon_years"]:
-                params["horizon_years"] = 10  # Default for younger investors
+                params["horizon_years"] = 10
             
-            # Ensure horizon is reasonable integer
             try:
                 params["horizon_years"] = max(1, min(30, int(params["horizon_years"])))
             except (ValueError, TypeError):
                 params["horizon_years"] = 10
             
-            # Ensure other fields exist
-            if "sector_preferences" not in params:
-                params["sector_preferences"] = []
-            if "constraints" not in params:
-                params["constraints"] = {}
-            if "confidence" not in params:
-                params["confidence"] = 0.8
-            if "reasoning" not in params:
-                params["reasoning"] = "Parameters extracted from user query"
+            # Ensure optional fields exist
+            params.setdefault("sector_preferences", [])
+            params.setdefault("constraints", {})
+            params.setdefault("confidence", 0.85)
+            params.setdefault("reasoning", "Extracted from user query")
             
-            logger.info(f"Extracted parameters: risk={params['risk_profile']}, horizon={params['horizon_years']}y")
+            logger.info(f"✅ Successfully extracted: risk={params['risk_profile']}, horizon={params['horizon_years']}y, confidence={params.get('confidence', 0):.2f}")
             return params
             
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing failed: {e}, content: {content}")
-            # Try to extract basic info from the query text itself as fallback
-            query_lower = user_query.lower()
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"JSON parsing failed: {e}, attempting fallback extraction")
+            return self._fallback_extraction(user_query)
+    
+    def _fallback_extraction(self, user_query: str) -> Dict:
+        """
+        Fallback extraction using regex and keyword matching
+        
+        Args:
+            user_query: User's query
             
-            # Extract risk from query
+        Returns:
+            Extracted parameters with defaults
+        """
+        import re
+        
+        query_lower = user_query.lower()
+        
+        # Extract risk profile from keywords
+        risk_profile = "medium"  # default
+        if any(word in query_lower for word in ["low", "conservative", "safe", "cautious", "careful"]):
+            risk_profile = "low"
+        elif any(word in query_lower for word in ["high", "aggressive", "growth", "risky", "maximum"]):
+            risk_profile = "high"
+        elif any(word in query_lower for word in ["moderate", "medium", "balanced", "normal"]):
             risk_profile = "medium"
-            if any(word in query_lower for word in ["low", "conservative", "safe", "cautious"]):
-                risk_profile = "low"
-            elif any(word in query_lower for word in ["high", "aggressive", "growth"]):
-                risk_profile = "high"
-            elif any(word in query_lower for word in ["moderate", "medium", "balanced"]):
-                risk_profile = "medium"
-            
-            # Extract age-based horizon
-            import re
-            age_match = re.search(r'\b(\d{2})\b', user_query)  # Look for 2-digit numbers (age)
-            horizon_years = 10
-            if age_match:
-                age = int(age_match.group(1))
-                if 18 <= age <= 25:
-                    horizon_years = 15
-                elif 25 < age <= 35:
-                    horizon_years = 12
-                elif 35 < age <= 50:
-                    horizon_years = 10
-                else:
-                    horizon_years = 8
-            
-            logger.info(f"Fallback extraction: risk={risk_profile}, horizon={horizon_years}y")
-            
-            return {
-                "risk_profile": risk_profile,
-                "horizon_years": horizon_years,
-                "sector_preferences": [],
-                "constraints": {},
-                "confidence": 0.6,
-                "reasoning": f"Fallback extraction: detected {risk_profile} risk tolerance with {horizon_years} year horizon"
-            }
+        
+        # Extract age and infer horizon
+        age_patterns = [
+            r'\bi(?:\'?m| am)\s+(\d{2})\b',  # "im 30" or "i'm 30"
+            r'\bage\s+(\d{2})\b',  # "age 30"
+            r'\b(\d{2})\s+years?\s+old\b',  # "30 years old"
+            r'\b(\d{2})\s*y/?o\b',  # "30yo" or "30 y/o"
+        ]
+        
+        age = None
+        for pattern in age_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                potential_age = int(match.group(1))
+                if 18 <= potential_age <= 80:  # Valid age range
+                    age = potential_age
+                    break
+        
+        # Infer horizon from age
+        if age:
+            if age < 30:
+                horizon_years = 15
+            elif age < 40:
+                horizon_years = 12
+            elif age < 50:
+                horizon_years = 10
+            elif age < 60:
+                horizon_years = 7
+            else:
+                horizon_years = 5
+        else:
+            # Look for explicit year mentions
+            year_match = re.search(r'(\d+)\s*(?:years?|y)\b', query_lower)
+            if year_match:
+                horizon_years = int(year_match.group(1))
+            else:
+                horizon_years = 10  # default
+        
+        # Ensure horizon is in valid range
+        horizon_years = max(1, min(30, horizon_years))
+        
+        logger.info(f"🔄 Fallback extraction: risk={risk_profile}, horizon={horizon_years}y (age={age})")
+        
+        return {
+            "risk_profile": risk_profile,
+            "horizon_years": horizon_years,
+            "sector_preferences": [],
+            "constraints": {},
+            "confidence": 0.7,
+            "reasoning": f"Fallback extraction: {risk_profile} risk with {horizon_years}-year horizon" + (f" (age {age})" if age else "")
+        }
     
     def _generate_enhanced_explanation(
         self,
@@ -291,30 +339,47 @@ class CerebrasPortfolioAgent:
             "base_explanation": optimization_result["explanation"]
         }
         
-        prompt = f"""You are explaining a portfolio recommendation to a client. 
+        prompt = f"""You are a friendly financial advisor explaining a portfolio recommendation.
 
-USER QUERY: {user_query}
+PORTFOLIO CONTEXT:
+Our investment universe contains 27 carefully selected stocks across 9 sectors:
+- IT: AAPL (Apple), MSFT (Microsoft), CSCO (Cisco), DDOG (Datadog), NOW (ServiceNow)
+- Finance: JPM (JPMorgan), V (Visa)
+- Healthcare: JNJ (Johnson & Johnson), UNH (UnitedHealth)
+- Agriculture: AGCO, BG (Bunge), CALM (Cal-Maine Foods)
+- Engineering: CAT (Caterpillar), DE (Deere), GE (General Electric)
+- Military Engineering: BA (Boeing), LMT (Lockheed Martin)
+- Natural Resources: CVX (Chevron)
+- Food & Beverages: KO (Coca-Cola)
+- Pharmaceuticals: Various pharma stocks
 
-RECOMMENDATION DETAILS:
-- Risk Profile: {params['risk_profile']}
-- Investment Horizon: {params['horizon_years']} years
-- Expected Annual Return: {optimization_result['metrics']['expected_annual_return']*100:.1f}%
-- Annual Volatility: {optimization_result['metrics']['annual_volatility']*100:.1f}%
-- Sharpe Ratio: {optimization_result['metrics']['sharpe_ratio']:.2f}
+USER'S SITUATION:
+Query: "{user_query}"
+Risk Tolerance: {params['risk_profile'].upper()}
+Investment Timeline: {params['horizon_years']} years
+Age/Context: {params.get('reasoning', 'Not specified')}
 
-TOP HOLDINGS:
-{self._format_top_holdings(optimization_result['weights'])}
+RECOMMENDED PORTFOLIO:
+Expected Return: {optimization_result['metrics']['expected_annual_return']*100:.1f}% annually
+Risk (Volatility): {optimization_result['metrics']['annual_volatility']*100:.1f}%
+Sharpe Ratio: {optimization_result['metrics']['sharpe_ratio']:.2f} (higher is better)
+Number of Holdings: {optimization_result['metrics']['diversification']} stocks
 
-SECTOR ALLOCATION:
+TOP 5 HOLDINGS:
+{self._format_top_holdings(optimization_result['weights'], limit=5)}
+
+SECTOR BREAKDOWN:
 {self._format_sector_allocation(optimization_result['sector_allocation'])}
 
-BASE EXPLANATION:
-{optimization_result['explanation']}
+INSTRUCTIONS:
+Write a warm, conversational explanation (2-3 paragraphs) that:
+1. Greets the user and acknowledges their situation (age, risk tolerance, timeline)
+2. Explains WHY this portfolio fits them (match risk profile to holdings)
+3. Highlights the key stocks and sectors in simple terms (e.g., "tech giants like Apple and Microsoft")
+4. Mentions the expected returns and how diversification protects them
+5. Ends with a forward-looking statement
 
-Generate a friendly, personalized explanation that:
-1. Directly addresses the user's query
-2. Explains the allocation in plain English (no jargon)
-3. Highlights why this fits their risk profile and timeline
+Keep it professional but friendly. Avoid jargon. Use "you" and "your".
 4. Mentions 2-3 specific stocks and why they're included
 5. Keeps a conversational, helpful tone
 6. Stays under 300 words
@@ -337,9 +402,9 @@ Do NOT include disclaimers (they will be added automatically).
         
         return enhanced_explanation
     
-    def _format_top_holdings(self, weights: Dict[str, float], top_n: int = 5) -> str:
+    def _format_top_holdings(self, weights: Dict[str, float], limit: int = 10) -> str:
         """Format top holdings for display"""
-        sorted_holdings = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        sorted_holdings = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:limit]
         
         lines = []
         for ticker, weight in sorted_holdings:
