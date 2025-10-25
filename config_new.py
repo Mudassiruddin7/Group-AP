@@ -21,7 +21,7 @@ DOW_JONES_CSV = DATASETS_DIR / "Dow_Jones.csv"
 
 # ========== Cerebras API Configuration ==========
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-3pdf28w2dmhpx3vxjkjw5ydpwrf4kj5p6tkj9dcyp443m2wr")
-CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "llama3.1-70b")
+CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "llama-3.3-70b")
 CEREBRAS_TEMPERATURE = float(os.getenv("CEREBRAS_TEMPERATURE", "0.7"))
 CEREBRAS_TOP_P = float(os.getenv("CEREBRAS_TOP_P", "0.8"))
 CEREBRAS_MAX_TOKENS = int(os.getenv("CEREBRAS_MAX_TOKENS", "20000"))
