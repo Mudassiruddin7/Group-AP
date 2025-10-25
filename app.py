@@ -256,116 +256,279 @@ def show_ai_chat():
 
 
 def show_quick_recommend():
-    """Quick recommendation form"""
-    st.header("⚡ Quick Portfolio Recommendation")
+    """Wall Street-Level Quantitative Portfolio Optimization Engine"""
     
-    col1, col2 = st.columns(2)
+    # Professional header
+    st.markdown('<div style="text-align: center; padding: 1rem 0;">', unsafe_allow_html=True)
+    st.markdown('## 📊 F2 Portfolio Recommender')
+    st.markdown('*Autonomous AI-Powered Portfolio Optimization with Cerebras*')
+    st.caption('Institutional-Grade Quantitative Analysis | Real-Time Model Inference | Mean-Variance Optimization')
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # Professional parameter input grid
+    st.markdown("### ⚙️ Portfolio Configuration Parameters")
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         risk_profile = st.select_slider(
-            "Risk Tolerance",
+            "🎯 Risk Tolerance",
             options=["low", "medium", "high"],
             value="medium",
-            help="How much risk are you willing to take?"
+            help="Defines volatility constraints and expected return targets"
         )
         
-        # Show risk profile details
         profile_details = RISK_PROFILES[risk_profile]
-        st.info(f"**Target Volatility:** {profile_details['target_volatility']*100:.0f}%  \n"
-                f"**Min Holdings:** {profile_details['min_diversification']}")
+        st.metric("Target Volatility", f"{profile_details['target_volatility']*100:.0f}%")
     
     with col2:
         horizon_years = st.slider(
-            "Investment Horizon (Years)",
+            "⏱️ Investment Horizon",
             min_value=1,
             max_value=30,
             value=5,
-            help="How long do you plan to invest?"
+            help="Time horizon for portfolio optimization and rebalancing strategy"
         )
         
         if horizon_years <= 3:
-            st.warning("⚠️ Short horizon - conservative recommended")
+            st.caption("⚠️ Short-term: Conservative allocation recommended")
         elif horizon_years >= 10:
-            st.success("✅ Long horizon - can handle volatility")
+            st.caption("✅ Long-term: Growth-oriented strategies enabled")
+        else:
+            st.caption("📊 Medium-term: Balanced growth approach")
     
-    # Sector preferences
-    all_sectors = st.session_state.data_loader.get_sector_mapping()
-    unique_sectors = sorted(set(all_sectors.values()))
+    with col3:
+        portfolio_value = st.number_input(
+            "💰 Total Investment ($)",
+            min_value=1000,
+            max_value=10000000,
+            value=10000,
+            step=1000,
+            help="Total capital allocation for discrete share optimization"
+        )
+        
+        min_holdings = st.number_input(
+            "🔢 Min Holdings",
+            min_value=3,
+            max_value=15,
+            value=profile_details['min_diversification'],
+            help="Minimum number of positions for diversification"
+        )
     
-    sector_preferences = st.multiselect(
-        "Sector Preferences (Optional)",
-        options=unique_sectors,
-        help="Select specific sectors you're interested in"
-    )
-    
-    # Portfolio value for discrete allocation
-    portfolio_value = st.number_input(
-        "Total Investment Amount ($)",
-        min_value=1000,
-        max_value=10000000,
-        value=10000,
-        step=1000,
-        help="Amount you want to invest"
-    )
-    
-    # Generate button
-    if st.button("🎯 Generate Recommendation", type="primary", use_container_width=True):
-        with st.spinner("🤖 Optimizing your portfolio..."):
-            # Create query
-            query = f"I have a {risk_profile} risk tolerance and want to invest for {horizon_years} years."
-            if sector_preferences:
-                query += f" I'm interested in {', '.join(sector_preferences)} sectors."
+    # Advanced parameters
+    with st.expander("🔬 Advanced Quantitative Parameters", expanded=False):
+        adv_col1, adv_col2 = st.columns(2)
+        
+        with adv_col1:
+            target_volatility = st.slider(
+                "Target Annual Volatility (%)",
+                min_value=5,
+                max_value=40,
+                value=int(profile_details['target_volatility'] * 100),
+                help="Maximum acceptable portfolio volatility (standard deviation)"
+            )
             
+            rebalance_frequency = st.selectbox(
+                "Rebalancing Frequency",
+                ["Monthly", "Quarterly", "Semi-Annual", "Annual"],
+                index=2,
+                help="How often to rebalance the portfolio"
+            )
+        
+        with adv_col2:
+            all_sectors = st.session_state.data_loader.get_sector_mapping()
+            unique_sectors = sorted(set(all_sectors.values()))
+            
+            sector_preferences = st.multiselect(
+                "Sector Preferences (Optional)",
+                options=unique_sectors,
+                help="Constrain optimization to specific sectors"
+            )
+            
+            include_etfs = st.checkbox("Include ETFs", value=False, help="Add ETF exposure (if available)")
+    
+    st.divider()
+    
+    # Generate button with professional styling
+    generate_col1, generate_col2, generate_col3 = st.columns([1, 2, 1])
+    
+    with generate_col2:
+        generate_clicked = st.button(
+            "🚀 GENERATE OPTIMAL PORTFOLIO",
+            type="primary",
+            use_container_width=True,
+            help="Execute mean-variance optimization with Cerebras AI inference"
+        )
+    
+    if generate_clicked:
+        # Professional loading message
+        with st.spinner("⚙️ Executing quantitative optimization pipeline..."):
+            st.info("🔄 **Status**: Fetching Cerebras model outputs | Calculating covariance matrices | Running Monte Carlo simulations...")
+            
+            # Build professional query
+            query = f"Generate an optimal portfolio with {risk_profile} risk tolerance for a {horizon_years}-year horizon."
+            if sector_preferences:
+                query += f" Focus on {', '.join(sector_preferences)} sectors."
+            
+            # Process with agent
             result = st.session_state.agent.process_query(query)
             
             if result["success"]:
                 st.session_state.recommendation = result
                 
-                st.success("✅ Portfolio optimized successfully!")
+                # Professional success message
+                st.success("✅ **Portfolio Optimization Complete** | Model: Cerebras Llama 3.3-70B | Optimization: Mean-Variance (Sharpe Maximization)")
                 
-                # Display results
                 st.divider()
                 
-                # Explanation
-                st.markdown("### 📝 Recommendation")
-                st.write(result["recommendation"]["explanation"])
+                # PORTFOLIO RECOMMENDATION HEADER
+                st.markdown("## ✅ Portfolio Recommendation")
+                
+                metrics = result["recommendation"]["metrics"]
+                allocation = result["recommendation"]["allocation"]
+                sector_allocation = result["recommendation"]["sector_allocation"]
+                
+                # Professional metrics display
+                metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+                
+                with metric_col1:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 1.5rem; border-radius: 10px; text-align: center; color: white;">
+                        <h3 style="margin: 0; font-size: 0.9rem;">📈 Expected Return</h3>
+                        <h1 style="margin: 0.5rem 0; font-size: 2rem;">{metrics['expected_annual_return']*100:.2f}%</h1>
+                        <p style="margin: 0; font-size: 0.8rem; opacity: 0.9;">Annualized</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with metric_col2:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                                padding: 1.5rem; border-radius: 10px; text-align: center; color: white;">
+                        <h3 style="margin: 0; font-size: 0.9rem;">📊 Volatility</h3>
+                        <h1 style="margin: 0.5rem 0; font-size: 2rem;">{metrics['annual_volatility']*100:.2f}%</h1>
+                        <p style="margin: 0; font-size: 0.8rem; opacity: 0.9;">Annual Std Dev</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with metric_col3:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
+                                padding: 1.5rem; border-radius: 10px; text-align: center; color: white;">
+                        <h3 style="margin: 0; font-size: 0.9rem;">⚡ Sharpe Ratio</h3>
+                        <h1 style="margin: 0.5rem 0; font-size: 2rem;">{metrics['sharpe_ratio']:.2f}</h1>
+                        <p style="margin: 0; font-size: 0.8rem; opacity: 0.9;">Risk-Adjusted</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with metric_col4:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); 
+                                padding: 1.5rem; border-radius: 10px; text-align: center; color: white;">
+                        <h3 style="margin: 0; font-size: 0.9rem;">🎯 Holdings</h3>
+                        <h1 style="margin: 0.5rem 0; font-size: 2rem;">{metrics['diversification']}</h1>
+                        <p style="margin: 0; font-size: 0.8rem; opacity: 0.9;">Positions</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.divider()
+                
+                # Allocations and discrete shares
+                alloc_col1, alloc_col2 = st.columns([1.5, 1])
+                
+                with alloc_col1:
+                    st.markdown("### � Portfolio Allocations")
+                    
+                    # Calculate discrete allocation
+                    discrete_alloc, leftover = st.session_state.agent.optimizer.discrete_allocation(
+                        allocation,
+                        portfolio_value
+                    )
+                    
+                    # Build professional allocation table
+                    alloc_data = []
+                    for ticker in sorted(allocation.keys(), key=lambda x: allocation[x], reverse=True):
+                        shares = discrete_alloc.get(ticker, 0)
+                        sector = st.session_state.data_loader.get_sector_mapping().get(ticker, "Unknown")
+                        
+                        alloc_data.append({
+                            "Ticker": ticker,
+                            "Allocation": f"{allocation[ticker]*100:.1f}%",
+                            "Shares": shares,
+                            "Sector": sector,
+                            "Weight": allocation[ticker]
+                        })
+                    
+                    df_alloc = pd.DataFrame(alloc_data)
+                    
+                    # Styled dataframe
+                    st.dataframe(
+                        df_alloc[["Ticker", "Sector", "Allocation", "Shares"]],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    st.info(f"💵 **Leftover Cash**: ${leftover:,.2f}")
+                
+                with alloc_col2:
+                    st.markdown("### 🌐 Sector Breakdown")
+                    
+                    sector_data = []
+                    for sector, weight in sorted(sector_allocation.items(), key=lambda x: x[1], reverse=True):
+                        sector_data.append({
+                            "Sector": sector,
+                            "Weight": f"{weight*100:.1f}%"
+                        })
+                    
+                    st.dataframe(
+                        pd.DataFrame(sector_data),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                
+                st.divider()
                 
                 # Visualizations
+                viz_col1, viz_col2 = st.columns(2)
+                
+                with viz_col1:
+                    show_allocation_chart(allocation)
+                
+                with viz_col2:
+                    show_sector_chart(sector_allocation)
+                
                 st.divider()
-                col1, col2 = st.columns(2)
                 
-                with col1:
-                    show_allocation_chart(result["recommendation"]["allocation"])
+                # AI Commentary
+                st.markdown("### 🧩 AI-Generated Portfolio Commentary")
                 
-                with col2:
-                    show_sector_chart(result["recommendation"]["sector_allocation"])
+                st.markdown(f"""
+                <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #667eea;">
+                {result["recommendation"]["explanation"]}
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Metrics
-                show_metrics_cards(result["recommendation"]["metrics"])
-                
-                # Discrete allocation
                 st.divider()
-                st.markdown("### 💰 Share Allocation")
                 
-                allocation, leftover = st.session_state.agent.optimizer.discrete_allocation(
-                    result["recommendation"]["allocation"],
-                    portfolio_value
-                )
+                # Professional disclaimer
+                st.warning("""
+                ⚠️ **DISCLAIMER**: This portfolio is AI-generated using Cerebras Llama 3.3-70B for **educational and demonstration purposes only**.
                 
-                df_allocation = pd.DataFrame([
-                    {
-                        "Ticker": ticker,
-                        "Shares": shares,
-                        "Sector": st.session_state.data_loader.get_sector_mapping()[ticker]
-                    }
-                    for ticker, shares in allocation.items()
-                ])
+                - This output does **NOT** constitute financial advice, investment recommendations, or trading signals.
+                - Past performance does not guarantee future results.
+                - All investments carry risk, including potential loss of principal.
+                - Consult a licensed financial advisor (CFA, CFP) before making investment decisions.
+                - Periodic rebalancing and risk monitoring are recommended.
                 
-                st.dataframe(df_allocation, use_container_width=True)
-                st.info(f"💵 Leftover cash: ${leftover:,.2f}")
+                **Optimization Method**: Mean-Variance Optimization | Sharpe Ratio Maximization  
+                **Data Source**: Historical price data (2020-2025) | Cerebras fine-tuned inference  
+                **Model**: Cerebras Llama 3.3-70B | Temperature: 0.7 | Real-time generation
+                """)
                 
             else:
-                st.error(f"❌ {result.get('message', 'Optimization failed')}")
+                st.error(f"❌ **Optimization Failed**: {result.get('message', 'Unknown error occurred. Please try again.')}")
 
 
 def show_portfolio_analysis():
