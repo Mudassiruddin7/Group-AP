@@ -79,6 +79,18 @@ class CerebrasPortfolioAgent:
                 "message": "Your query contains sensitive information or violates safety policies. Please rephrase."
             }
         
+        # Step 1.5: Classify query intent - is this a portfolio request or general chat?
+        query_intent = self._classify_query_intent(user_query, chat_history)
+        
+        if query_intent == "general_chat":
+            # Handle general conversation without portfolio generation
+            return self._handle_general_chat(user_query, chat_history)
+        elif query_intent == "research":
+            # Handle research/information requests
+            return self._handle_research_query(user_query, chat_history)
+        
+        # If portfolio request, continue with optimization...
+        
         # Step 2: Extract Investment Parameters using Cerebras
         params = self._extract_parameters(user_query)
         logger.info(f"Extracted parameters: {params}")
@@ -435,6 +447,171 @@ Do NOT include disclaimers (they will be added automatically).
             lines.append(f"  - {ticker} ({sector}): {weight*100:.1f}%")
         
         return "\n".join(lines)
+    
+    def _classify_query_intent(self, user_query: str, chat_history: Optional[List[Dict]] = None) -> str:
+        """
+        Classify whether user wants portfolio recommendation, research, or general chat
+        
+        Args:
+            user_query: User's message
+            chat_history: Previous conversation
+            
+        Returns:
+            Intent: 'portfolio_request', 'research', or 'general_chat'
+        """
+        query_lower = user_query.lower().strip()
+        
+        # Very short greetings without context
+        if query_lower in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "greetings"]:
+            return "general_chat"
+        
+        # Research/information requests
+        research_keywords = ["research", "tell me about", "what is", "explain", "how does", "analyze", 
+                            "information on", "learn about", "details on", "study", "investigate"]
+        if any(keyword in query_lower for keyword in research_keywords):
+            return "research"
+        
+        # Portfolio-related keywords
+        portfolio_keywords = ["portfolio", "invest", "recommendation", "allocat", "risk", "stocks", 
+                             "diversif", "balance", "age", "years old", "retirement", "saving",
+                             "conservative", "aggressive", "moderate", "medium risk", "low risk", "high risk"]
+        
+        # Check if query has portfolio intent
+        if any(keyword in query_lower for keyword in portfolio_keywords):
+            return "portfolio_request"
+        
+        # If query mentions numbers that could be age or years
+        import re
+        if re.search(r'\b(im|i\'m|i am)\s+\d{2}\b', query_lower) or re.search(r'\d+\s*years?', query_lower):
+            return "portfolio_request"
+        
+        # Default to general chat for ambiguous queries
+        return "general_chat"
+    
+    def _handle_general_chat(self, user_query: str, chat_history: Optional[List[Dict]] = None) -> Dict:
+        """
+        Handle general conversation without portfolio generation
+        
+        Args:
+            user_query: User's message
+            chat_history: Previous messages
+            
+        Returns:
+            Response dictionary with conversational reply
+        """
+        logger.info("Handling general chat query")
+        
+        messages = [
+            {"role": "system", "content": """You are "F2 Portfolio AI", a friendly and knowledgeable investment advisor assistant. 
+
+When users greet you or ask general questions:
+- Respond warmly and professionally
+- Introduce yourself briefly
+- Ask how you can help with their investment needs
+- Suggest they can ask about portfolio recommendations, risk management, investment strategies, or market research
+
+Keep responses concise (2-3 sentences) unless asked for details.
+Be helpful, educational, and encouraging."""}
+        ]
+        
+        if chat_history:
+            messages.extend(chat_history[-5:])  # Include last 5 messages for context
+        
+        messages.append({"role": "user", "content": user_query})
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=300
+            )
+            
+            reply = response.choices[0].message.content.strip()
+            
+            return {
+                "success": True,
+                "is_chat": True,
+                "message": reply,
+                "recommendation": None,
+                "parameters": None
+            }
+            
+        except Exception as e:
+            logger.error(f"Chat failed: {e}")
+            return {
+                "success": True,
+                "is_chat": True,
+                "message": "Hello! I'm F2 Portfolio AI, your investment strategy assistant. I can help you with personalized portfolio recommendations based on your age, risk tolerance, and investment goals. I can also research investment topics and explain financial concepts. How can I assist you today?",
+                "recommendation": None,
+                "parameters": None
+            }
+    
+    def _handle_research_query(self, user_query: str, chat_history: Optional[List[Dict]] = None) -> Dict:
+        """
+        Handle research and information requests using Cerebras
+        
+        Args:
+            user_query: Research question
+            chat_history: Previous messages
+            
+        Returns:
+            Response dictionary with research answer
+        """
+        logger.info("Handling research query")
+        
+        messages = [
+            {"role": "system", "content": """You are "F2 Portfolio AI", an investment research assistant with expertise in:
+- Stock analysis and company fundamentals
+- Market trends and economic indicators
+- Investment strategies and portfolio theory
+- Sector analysis and industry trends
+- Risk management and diversification
+
+When answering research questions:
+1. Provide accurate, balanced information
+2. Cite general market knowledge (no real-time data)
+3. Explain concepts clearly without jargon
+4. Include relevant context and examples
+5. Mention any limitations or risks
+6. Keep responses educational and informative
+
+Always include a note that this is general information, not specific investment advice."""}
+        ]
+        
+        if chat_history:
+            messages.extend(chat_history[-5:])
+        
+        messages.append({"role": "user", "content": user_query})
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.6,
+                max_tokens=800
+            )
+            
+            reply = response.choices[0].message.content.strip()
+            
+            # Add disclaimer for research
+            reply += "\n\n💡 Note: This is general educational information. For specific investment decisions, please consult a licensed financial advisor."
+            
+            return {
+                "success": True,
+                "is_research": True,
+                "message": reply,
+                "recommendation": None,
+                "parameters": None
+            }
+            
+        except Exception as e:
+            logger.error(f"Research query failed: {e}")
+            return {
+                "success": False,
+                "error": "Research failed",
+                "message": "I encountered an error while researching that topic. Please try rephrasing your question."
+            }
     
     def _format_sector_allocation(self, sector_allocation: Dict[str, float]) -> str:
         """Format sector allocation for display"""

@@ -130,7 +130,14 @@ def show_ai_chat():
                     st.session_state.chat_history
                 )
                 
-                if result["success"]:
+                # Check if this is a chat/research response or portfolio recommendation
+                if result.get("is_chat") or result.get("is_research"):
+                    # General chat or research - just show the message
+                    response_text = result.get("message", "")
+                    st.write(response_text)
+                    
+                elif result["success"] and result.get("recommendation"):
+                    # Portfolio recommendation - show full details
                     response_text = result["recommendation"]["explanation"]
                     st.write(response_text)
                     
@@ -151,6 +158,7 @@ def show_ai_chat():
                     show_metrics_cards(result["recommendation"]["metrics"])
                     
                 else:
+                    # Error case
                     response_text = result.get("message", "Error processing request")
                     st.error(response_text)
         
