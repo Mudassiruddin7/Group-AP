@@ -166,14 +166,15 @@ class CerebrasPortfolioAgent:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a financial parameter extraction AI. Extract investment parameters and return ONLY valid JSON."},
+                {"role": "system", "content": "You are a financial parameter extraction AI specialized in understanding investment queries. Extract investment parameters from user input (even brief queries) and return ONLY valid JSON. Be smart about inferring parameters from context like age and risk tolerance."},
                 {"role": "user", "content": extraction_prompt}
             ],
-            temperature=0.3,  # Lower temperature for extraction
-            max_tokens=500
+            temperature=0.2,  # Lower temperature for consistent extraction
+            max_tokens=800
         )
         
         content = response.choices[0].message.content.strip()
+        logger.info(f"LLM extraction response: {content[:200]}...")
         
         # Parse JSON response
         try:
@@ -185,29 +186,79 @@ class CerebrasPortfolioAgent:
             
             params = json.loads(content)
             
-            # Validate required fields
-            if "risk_profile" not in params:
+            # Validate and normalize required fields
+            if "risk_profile" not in params or not params["risk_profile"]:
                 params["risk_profile"] = "medium"  # Default
             
-            if "horizon_years" not in params:
-                params["horizon_years"] = 5  # Default
-            
-            # Ensure valid risk profile
-            if params["risk_profile"] not in ["low", "medium", "high"]:
+            # Normalize risk profile keywords
+            risk_lower = str(params["risk_profile"]).lower()
+            if "low" in risk_lower or "conservative" in risk_lower or "safe" in risk_lower:
+                params["risk_profile"] = "low"
+            elif "high" in risk_lower or "aggressive" in risk_lower or "growth" in risk_lower:
+                params["risk_profile"] = "high"
+            else:
                 params["risk_profile"] = "medium"
             
+            if "horizon_years" not in params or not params["horizon_years"]:
+                params["horizon_years"] = 10  # Default for younger investors
+            
+            # Ensure horizon is reasonable integer
+            try:
+                params["horizon_years"] = max(1, min(30, int(params["horizon_years"])))
+            except (ValueError, TypeError):
+                params["horizon_years"] = 10
+            
+            # Ensure other fields exist
+            if "sector_preferences" not in params:
+                params["sector_preferences"] = []
+            if "constraints" not in params:
+                params["constraints"] = {}
+            if "confidence" not in params:
+                params["confidence"] = 0.8
+            if "reasoning" not in params:
+                params["reasoning"] = "Parameters extracted from user query"
+            
+            logger.info(f"Extracted parameters: risk={params['risk_profile']}, horizon={params['horizon_years']}y")
             return params
             
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing failed: {e}, content: {content}")
-            # Return defaults
+            # Try to extract basic info from the query text itself as fallback
+            query_lower = user_query.lower()
+            
+            # Extract risk from query
+            risk_profile = "medium"
+            if any(word in query_lower for word in ["low", "conservative", "safe", "cautious"]):
+                risk_profile = "low"
+            elif any(word in query_lower for word in ["high", "aggressive", "growth"]):
+                risk_profile = "high"
+            elif any(word in query_lower for word in ["moderate", "medium", "balanced"]):
+                risk_profile = "medium"
+            
+            # Extract age-based horizon
+            import re
+            age_match = re.search(r'\b(\d{2})\b', user_query)  # Look for 2-digit numbers (age)
+            horizon_years = 10
+            if age_match:
+                age = int(age_match.group(1))
+                if 18 <= age <= 25:
+                    horizon_years = 15
+                elif 25 < age <= 35:
+                    horizon_years = 12
+                elif 35 < age <= 50:
+                    horizon_years = 10
+                else:
+                    horizon_years = 8
+            
+            logger.info(f"Fallback extraction: risk={risk_profile}, horizon={horizon_years}y")
+            
             return {
-                "risk_profile": "medium",
-                "horizon_years": 5,
+                "risk_profile": risk_profile,
+                "horizon_years": horizon_years,
                 "sector_preferences": [],
                 "constraints": {},
-                "confidence": 0.5,
-                "reasoning": "Using default parameters due to extraction failure"
+                "confidence": 0.6,
+                "reasoning": f"Fallback extraction: detected {risk_profile} risk tolerance with {horizon_years} year horizon"
             }
     
     def _generate_enhanced_explanation(

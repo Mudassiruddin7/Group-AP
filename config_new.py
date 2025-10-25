@@ -120,18 +120,33 @@ User Query: "{query}"
 
 Extract:
 1. **Risk Profile**: Classify as 'low', 'medium', or 'high'
-   - Keywords: conservative/safe → low
-   - Keywords: balanced/moderate → medium  
-   - Keywords: aggressive/growth → high
+   - Keywords: conservative/safe/cautious → low
+   - Keywords: balanced/moderate/medium → medium  
+   - Keywords: aggressive/growth/high → high
+   - Age-based inference: 
+     * Young (18-30) → typically medium-high risk tolerance
+     * Mid-career (30-50) → typically medium risk tolerance
+     * Near retirement (50+) → typically low-medium risk tolerance
 
 2. **Horizon (Years)**: Extract investment timeline
-   - Look for explicit years
+   - Look for explicit years or time periods
+   - Age-based inference if mentioned:
+     * Age 18-25 → assume 15-20 years for long-term goals
+     * Age 25-35 → assume 10-15 years
+     * Age 35-50 → assume 8-12 years
+     * Age 50+ → assume 5-10 years
    - Map life events: retirement (assume 15y), house (5-7y), education (10-15y)
-   - Default: 5 years if unclear
+   - Default: 10 years if young age mentioned, 5 years otherwise
 
 3. **Sector Preferences** (optional): Any specific industry interests
+   - Available sectors: IT, Finance, Healthcare, Agriculture, Engineering, Military Engineering, Natural Resources, Food & Beverages, Pharmaceuticals
 
 4. **Constraints** (optional): Any specific requirements
+
+**IMPORTANT**: Even if the query is brief (e.g., "im 20, moderate risk"), extract what you can:
+- If age is mentioned, infer a reasonable horizon
+- If risk level is mentioned, use it directly
+- Always return valid JSON even for minimal input
 
 Return ONLY valid JSON:
 {{
@@ -140,7 +155,7 @@ Return ONLY valid JSON:
   "sector_preferences": [<list of sectors or empty>],
   "constraints": {{}},
   "confidence": <0.0-1.0>,
-  "reasoning": "<brief explanation>"
+  "reasoning": "<brief explanation of what was extracted>"
 }}"""
 
 # ========== Streamlit Configuration ==========

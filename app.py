@@ -83,51 +83,20 @@ def main():
         unsafe_allow_html=True
     )
     
-    # Sidebar
-    with st.sidebar:
-        st.header("⚙️ Configuration")
-        
-        # Mode selection
-        app_mode = st.radio(
-            "Select Mode",
-            ["🤖 AI Chat", "⚡ Quick Recommend", "📈 Portfolio Analysis", "ℹ️ About"],
-            index=0
-        )
-        
-        st.divider()
-        
-        # Data validation
-        with st.expander("📊 Data Status"):
-            is_valid, issues = st.session_state.data_loader.validate_data()
-            
-            if is_valid:
-                st.success("✅ All data validated")
-            else:
-                st.warning("⚠️ Data issues detected")
-                for issue in issues:
-                    st.text(f"- {issue}")
-            
-            stats = st.session_state.data_loader.get_portfolio_stats()
-            st.metric("Total Stocks", stats['total_stocks'])
-            st.metric("Sectors", len(stats['sectors']))
-        
-        st.divider()
-        
-        # Model info
-        with st.expander("🤖 AI Model"):
-            st.write(f"**Model:** {st.session_state.agent.model}")
-            st.write("**Provider:** Cerebras Cloud")
-            st.write("**Status:** Active")
+    # Top menu bar with tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🤖 AI Chat", "⚡ Quick Recommend", "📈 Portfolio Analysis", "⚙️ Settings"])
     
-    # Main content based on mode
-    if app_mode == "🤖 AI Chat":
+    with tab1:
         show_ai_chat()
-    elif app_mode == "⚡ Quick Recommend":
+    
+    with tab2:
         show_quick_recommend()
-    elif app_mode == "📈 Portfolio Analysis":
+    
+    with tab3:
         show_portfolio_analysis()
-    else:
-        show_about()
+    
+    with tab4:
+        show_settings()
 
 
 def show_ai_chat():
@@ -402,68 +371,82 @@ def show_portfolio_analysis():
         st.dataframe(stats_df, use_container_width=True)
 
 
-def show_about():
-    """About page"""
-    st.header("ℹ️ About F2 Portfolio Recommender")
+def show_settings():
+    """Settings and configuration page"""
+    st.header("⚙️ Settings & Information")
     
-    st.markdown("""
-    ### 🎯 What is This?
+    col1, col2 = st.columns(2)
     
-    The **F2 Portfolio Recommender** is an autonomous AI agent that provides personalized 
-    investment portfolio recommendations using cutting-edge technology:
+    with col1:
+        st.subheader("📊 Data Status")
+        is_valid, issues = st.session_state.data_loader.validate_data()
+        
+        if is_valid:
+            st.success("✅ All data validated")
+        else:
+            st.warning("⚠️ Data issues detected")
+            for issue in issues:
+                st.text(f"- {issue}")
+        
+        stats = st.session_state.data_loader.get_portfolio_stats()
+        
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.metric("Total Stocks", stats['total_stocks'])
+        with col_b:
+            st.metric("Sectors", len(stats['sectors']))
+        with col_c:
+            if stats['total_value']:
+                st.metric("Total Value", f"${stats['total_value']:,.2f}")
+        
+        st.divider()
+        
+        st.subheader("📈 Data Sources")
+        st.write("- **Portfolio Data**: Portfolio.csv")
+        st.write("- **Historical Prices**: Portfolio_prices.csv (35K+ records)")
+        st.write(f"- **Sectors**: {', '.join(stats['sectors'][:5])}...")
     
-    - 🤖 **Cerebras AI**: Powered by Llama 3.1 70B for intelligent reasoning
-    - 📊 **PyPortfolioOpt**: Quantitative optimization based on Modern Portfolio Theory
-    - 🛡️ **Safety Guardrails**: PII detection and mandatory disclaimers
-    - 📈 **Real Data**: Uses actual historical price data from your portfolio
+    with col2:
+        st.subheader("🤖 AI Model")
+        st.metric("Model", st.session_state.agent.model)
+        st.metric("Provider", "Cerebras Cloud")
+        st.metric("Status", "🟢 Active")
+        
+        st.divider()
+        
+        st.subheader("🏗️ Architecture")
+        st.write("""
+        The system follows a 5-layer agentic architecture:
+        
+        1. **Input Guardrails** - Validates user input
+        2. **Agentic Reasoning** - Cerebras AI extracts parameters
+        3. **Quantitative Optimization** - PyPortfolioOpt generates allocations
+        4. **Explanation Generation** - AI creates explanations
+        5. **Output Guardrails** - Ensures compliance
+        """)
     
-    ### 🏗️ Architecture
+    st.divider()
     
-    The system follows a 5-layer agentic architecture:
-    
-    1. **Input Guardrails**: Validates user input for safety
-    2. **Agentic Reasoning**: Cerebras AI extracts investment parameters
-    3. **Quantitative Optimization**: PyPortfolioOpt generates optimal allocations
-    4. **Explanation Generation**: AI creates personalized explanations
-    5. **Output Guardrails**: Ensures compliance and disclaimers
-    
-    ### 🔒 Safety Features
-    
-    - PII detection (SSN, credit cards, etc.)
-    - Mandatory regulatory disclaimers
-    - Input validation and sanitization
-    - No storage of personal information
-    
-    ### 📊 Data Sources
-    
-    - **Portfolio Data**: Real holdings from Portfolio.csv
-    - **Historical Prices**: 35,000+ daily records from Portfolio_prices.csv
-    - **Sectors**: IT, Finance, Healthcare, Agriculture, and more
-    
-    ### ⚠️ Important Disclaimer
-    
+    # Important Info
+    st.subheader("⚠️ Important Disclaimer")
+    st.warning("""
     This application is for **demonstration and educational purposes only**. 
     It is **NOT financial advice**. Always consult with a registered financial 
     advisor before making investment decisions.
-    
-    ### 🛠️ Technology Stack
-    
-    - **Frontend**: Streamlit
-    - **AI Model**: Cerebras Cloud SDK (Llama 3.1 70B)
-    - **Optimization**: PyPortfolioOpt, pandas, numpy
-    - **Visualization**: Plotly
-    - **Data**: CSV-based historical data
-    
-    ### 📝 Version
-    
-    **Version**: 1.0.0 (Restructured)  
-    **Last Updated**: {datetime.now().strftime("%Y-%m-%d")}  
-    **Model**: llama3.1-70b via Cerebras
-    
-    ---
-    
-    💡 **Tip**: Try the AI Chat mode for the most interactive experience!
     """)
+    
+    st.divider()
+    
+    # Tech Stack
+    st.subheader("🛠️ Technology Stack")
+    tech_df = pd.DataFrame([
+        {"Component": "AI Model", "Technology": "Cerebras Llama 3.1 70B"},
+        {"Component": "Frontend", "Technology": "Streamlit 1.32+"},
+        {"Component": "Optimization", "Technology": "PyPortfolioOpt 1.5+"},
+        {"Component": "Data Processing", "Technology": "pandas, numpy"},
+        {"Component": "Visualization", "Technology": "Plotly 5.18+"},
+    ])
+    st.dataframe(tech_df, use_container_width=True, hide_index=True)
 
 
 # Visualization helpers
